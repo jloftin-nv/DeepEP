@@ -33,14 +33,17 @@ def test_main(num_sms: int, local_rank: int, num_local_ranks: int, num_ranks: in
     topk_weights_pure_rand = torch.randn((num_tokens, num_topk), dtype=torch.float32, device='cuda')
     rank_idx = topk_idx // (num_experts // num_ranks)
     rank_idx.masked_fill_(topk_idx == -1, -1)
+    rank_idx = rank_idx.to(torch.int64)
     inplace_unique(rank_idx, num_ranks)
     rdma_rank_idx = rank_idx // num_local_ranks
     rdma_rank_idx.masked_fill_(rank_idx == -1, -1)
+    rdma_rank_idx = rdma_rank_idx.to(torch.int64)
     inplace_unique(rdma_rank_idx, num_nodes)
 
     # RDMA dispatch counts
     rdma_idx = topk_idx // (num_experts // num_nodes)
     rdma_idx.masked_fill_(topk_idx == -1, -1)
+    rdma_idx = rdma_idx.to(torch.int64)
     inplace_unique(rdma_idx, num_nodes)
     num_rdma_token_sent = rdma_idx.ne(-1).sum().item()
 
@@ -121,14 +124,14 @@ def test_main(num_sms: int, local_rank: int, num_local_ranks: int, num_ranks: in
                     recv_topk_weights_clone = None
                     if with_topk:
                         # Check `topk_idx`
-                        assert (recv_topk_idx.eq(-1) | ((recv_topk_idx >= 0) & (recv_topk_idx < (num_experts // num_ranks)))).sum().item() == recv_topk_idx.numel()
+                        assert (recv_topk_idx.eq(num_experts) | ((recv_topk_idx >= 0) & (recv_topk_idx < (num_experts // num_ranks)))).sum().item() == recv_topk_idx.numel()
                         for i, count in enumerate(recv_num_tokens_per_expert_list):
                             assert recv_topk_idx.eq(i).sum().item() == count
 
                         # Check `topk_weights`
                         recv_topk_weights_clone = recv_topk_weights.clone()
                         if current_x is not x_pure_rand:
-                            recv_topk_weights[recv_topk_idx.eq(-1)] = recv_topk_weights.amax(dim=1, keepdim=True).expand_as(recv_topk_weights)[recv_topk_idx.eq(-1)]
+                            recv_topk_weights[recv_topk_idx.eq(num_experts)] = recv_topk_weights.amax(dim=1, keepdim=True).expand_as(recv_topk_weights)[recv_topk_idx.eq(num_experts)]
                             check_data(recv_topk_weights, recv_gbl_rank_prefix_sum)
 
                     # Test `num_worst_tokens != 0`
@@ -146,7 +149,7 @@ def test_main(num_sms: int, local_rank: int, num_local_ranks: int, num_ranks: in
                         assert torch.equal(recv_x, recv_worst_x[:recv_x.size(0)])
                         assert torch.equal(recv_topk_idx, recv_worst_topk_idx[:recv_x.size(0)])
                         assert torch.equal(recv_topk_weights_clone, recv_worst_topk_weights[:recv_x.size(0)])
-                        assert torch.all(recv_worst_topk_idx[recv_x.size(0):] == -1).item()
+                        assert torch.all(recv_worst_topk_idx[recv_x.size(0):] == num_experts).item()
 
                     # Test cached dispatch (must without top-k staffs)
                     if not with_topk:
