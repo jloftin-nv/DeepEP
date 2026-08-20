@@ -503,7 +503,7 @@ void dispatch_fp4(void* packed_recv_x, void* packed_recv_x_scales,
                 int num_topk, int num_experts, int rank, int num_ranks,
                 void* workspace, int num_device_sms,
                 cudaStream_t stream, int phases) {
-    constexpr int kNumMaxTopK = 9;
+    constexpr int kNumMaxTopK = 16;
     const int num_warp_groups = ceil_div(num_experts, num_device_sms);
     const int num_warps_per_group = 32 / num_warp_groups;
     EP_HOST_ASSERT(num_warp_groups > 0 and num_warps_per_group > 0);
@@ -768,7 +768,7 @@ void low_precision_combine(int precision,void* combined_x,
             void* workspace, int num_device_sms,
             cudaStream_t stream, int phases) {
     EP_HOST_ASSERT(precision == 0 or precision == 1);
-    constexpr int kNumMaxTopk = 9;
+    constexpr int kNumMaxTopk = 16;
     const int num_warp_groups = ceil_div(num_experts, num_device_sms);
     const int num_warps_per_group = 32 / num_warp_groups;
     EP_HOST_ASSERT(num_warp_groups > 0 and num_warps_per_group > 0);
